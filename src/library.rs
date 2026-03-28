@@ -1,52 +1,112 @@
 
 pub use color_print;
 pub mod sudoku_3d {
-    struct RemainingAtPos {
-        pos: (usize, usize, usize),
-        list: Vec<usize>,
+    
+
+    pub fn solve_sudoku(sdk:  &Vec<Vec<Vec<Option<usize>>>>) -> (bool, Vec<Vec<Vec<Option<usize>>>>) {
+        let sdk_size = sdk.len();
+        let mut mut_sdk = sdk.clone();
+        (solve_sudoku_recurs(&mut mut_sdk, sdk_size), mut_sdk)
     }
 
-
-    pub fn solve_sudoku(mut sdk:  Vec<Vec<Vec<Option<usize>>>>) -> (bool, Vec<Vec<Vec<Option<usize>>>>) {
-        // return 3-dimensional vector of uint
-        let sdk_size = sdk.len();
+    fn solve_sudoku_recurs(sdk: &mut Vec<Vec<Vec<Option<usize>>>>, sdk_size: usize) -> bool {
 
         let mut list_remaining: Vec<RemainingAtPos> = Vec::new();
         let mut found_single_remain = false;
         'x_es: for x in 0..sdk_size {
-            for y in 0.. sdk_size {
+            for y in 0..sdk_size {
                 for z in 0..sdk_size {
                     if sdk[x][y][z].is_some() {continue;} 
 
-                    list_remaining.push(RemainingAtPos{pos: (x,y,z), list: get_remaining(&sdk, &(x,y,z))});
+                    let cur_remaining = RemainingAtPos{pos: (x,y,z), list: get_remaining(&sdk, &(x,y,z))};
+                    if cur_remaining.list.len() == 0 {continue;}
+                    list_remaining.push(cur_remaining);
 
                     if list_remaining.last().unwrap().list.len() == 1 {
                         // only one option possible, put this option in the sudoku
                         found_single_remain = true;
                         break 'x_es;
-                    } else if list_remaining.last().unwrap().list.len() == 0 {
-                        // No number could be filled at this position in the sudoku
-                        return (false, sdk);
-                    } else {
-                        // more than one option could be filled in this cell
-                        // go on normally
                     }
                 }
             }
         }
+        println!("Next iteration: length of {}", list_remaining.len());
+        for each in &list_remaining {
+            each.print_info();
+            println!("");
+        } 
         if list_remaining.len() == 0 {
-            return (true, sdk);
+            // No option available, abort!
+           return false;
         }
+
         if found_single_remain {
+            println!("Found just one remaining!");
             let chosen_r: &RemainingAtPos = list_remaining.last().unwrap();
             sdk[chosen_r.pos.0][chosen_r.pos.1][chosen_r.pos.2] = Some(chosen_r.list.last().unwrap().clone());
+            return solve_sudoku_recurs(sdk, sdk_size);
+        } else {
+            list_remaining.sort();
+            let chosen_r: &RemainingAtPos = &list_remaining[0];
+            for val in chosen_r.list.clone() {
+                // try every option (val) found for this cell
+                sdk[chosen_r.pos.0][chosen_r.pos.1][chosen_r.pos.2] = Some(val.clone());
+                let has_worked = solve_sudoku_recurs(sdk, sdk_size);
+                if has_worked {
+                    return true;
+                }
+                println!("Trying {} at {:?} failed, moving on", val, chosen_r.pos);
+            }
         }
-        (true ,sdk)
+
+       false 
     }
+    struct RemainingAtPos {
+        pos: (usize, usize, usize),
+        list: Vec<usize>,
+    }
+    impl RemainingAtPos {
+        fn print_info(&self) {
+            print!("{:?}: ", self.pos);
+            for val in &self.list {
+                print!("{val} ");
+            }
+        }
+    }
+    impl Ord for RemainingAtPos {
+        fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+            self.list.len().cmp(&other.list.len())
+        }
+    }
+    impl PartialOrd for RemainingAtPos {
+        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+            Some(self.cmp(&other))
+        }
+    }
+    impl PartialEq for RemainingAtPos {
+        fn eq(&self, other: &Self) -> bool {
+            if !self.pos.eq(&other.pos) {
+                return false;
+            }
+            self.list.eq(&other.list)
+        }
+    }
+    impl Eq for RemainingAtPos {}
 
 
     pub fn print_sudoku(sdk: &Vec<Vec<Vec<Option<usize>>>>) -> () {
         print!("\n");
+
+        println!("Some quick explanation:");
+        color_print::cprintln!("0 -- <g>z</> -- <g>z+1</> -- <g>...</>");
+        color_print::cprintln!("|\n<b>y</>\n|\n<b>y+1</>\n|\n<b>...</>");
+        color_print::cprintln!("\n[<r>x</>, <r>x+1</>, <r>...</>, <r>x+box_size-1</>]");
+        color_print::cprintln!("The <r>layer</> number is added to the <r>x</> coordinate\n");
+        color_print::cprintln!("You're basically seeing a whole box at once\n");
+        color_print::cprintln!("[ 1, <r>2</>, <r>3</>] [ <g>4</>, 5, 6] [ <g>7</>, 8, 9]  ...");
+        color_print::cprintln!("[ <b>2</>, 3, 4] [ 5, 6, 7] [ 8, 9,10]  ...");
+        color_print::cprintln!("[ <b>3</>, 4, 5] [ 6, 7, 8] [ 9,10,11]  ...");
+        println!("...\n");
 
         let sdk_size = sdk.len();
         let str_max_size = sdk_size.to_string().len();
@@ -56,15 +116,6 @@ pub mod sudoku_3d {
         println!("Size of one Box: {}", box_size);
         print!("\n");
 
-        println!("Some quick explanation:");
-        color_print::cprintln!("0 -- <g>z</> -- <g>z+1</> -- <g>...</>");
-        color_print::cprintln!("|\n<b>y</>\n|\n<b>y+1</>\n|\n<b>...</>");
-        color_print::cprintln!("\n[<r>x</>, <r>x+1</>, <r>...</>, <r>x+box_size-1</>]");
-        color_print::cprintln!("The <r>layer</> number is added to the <r>x</> coordinate\n\nYou're basically seeing three layers at once\n\n");
-        color_print::cprintln!("[ <W><k>1</></>, <r>2</>, <r>3</>] [ <g>4</>, 5, 6] [ <g>7</>, 8, 9]  ...");
-        color_print::cprintln!("[ <b>2</>, 3, 4] [ 5, 6, 7] [ 8, 9,10]  ...");
-        color_print::cprintln!("[ <b>3</>, 4, 5] [ 6, 7, 8] [ 9,10,11]  ...");
-        println!("...\n");
 
         for x in (0..sdk_size).step_by(box_size) {
             print!("Layer {x}\n");
@@ -157,7 +208,7 @@ pub mod sudoku_3d {
         // retain() keeps true and deletes false
         remain_values.retain(|x| !found_values.contains(x));
 
-        print!("Remaining values at positon {:?}: {:?}\n", pos, remain_values);
+        //println!("Remaining values at positon {:?}: {:?}", pos, remain_values);
 
         return remain_values;
     }
@@ -192,8 +243,6 @@ pub mod sudoku_3d {
         }
         rand_sudoku
     }
-
-
 }
 /*
 #[cfg(test)]
