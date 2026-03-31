@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 color-print = "0.3.7"
 rand = "0.10.0"
+random = "0.14.1"

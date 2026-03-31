@@ -1,24 +1,30 @@
-
 pub use color_print;
+
+pub mod cell;
+pub use crate::cell::*;
 pub mod sudoku_3d {
+    use crate::Cell;
 
-
-    pub type SudokuVec = Vec<Vec<Vec<Option<usize>>>>;
+    pub type CellGrid = Vec<Vec<Vec<Cell>>>;
     #[derive(Clone, PartialEq, Eq)]
     pub struct Sudoku3D {
         sdk_size: usize,
         box_size: usize,
-        grid: SudokuVec,
+        grid: CellGrid,
     }
 
-
     impl Sudoku3D {
-        pub fn new(sdk: SudokuVec) -> Sudoku3D {
+        pub fn new(sdk: CellGrid) -> Sudoku3D {
             let size = sdk.len();
-            Sudoku3D{sdk_size: size, box_size: Sudoku3D::sdk_size_to_box_size(size), grid: sdk}
+            return Sudoku3D {
+                sdk_size: size,
+                box_size: Sudoku3D::sdk_size_to_box_size(size),
+                grid: sdk,
+            };
+            
         }
 
-        pub fn solve_sudoku_from_grid(sdk: SudokuVec) -> (bool, SudokuVec){
+        pub fn solve_sudoku_from_grid(sdk: CellGrid) -> (bool, CellGrid) {
             // A wrapper function to not have to worry about types so much
             let sudoku = Sudoku3D::new(sdk);
             let result = sudoku.solve_sudoku();
@@ -49,11 +55,18 @@ pub mod sudoku_3d {
             'x_es: for x in 0..self.sdk_size {
                 for y in 0..self.sdk_size {
                     for z in 0..self.sdk_size {
-                        if self.grid[x][y][z].is_some() {continue;} 
-                        println!("Pos {:?}: {:?}", (x,y,z), self.get_remaining(&(x,y,z)));
+                        if self.grid[x][y][z].value().is_some() {
+                            continue;
+                        }
+                        println!("Pos {:?}: {:?}", (x, y, z), self.get_remaining(&(x, y, z)));
 
-                        let cur_remaining = RemainingAtPos{pos: (x,y,z), list: self.get_remaining(&(x,y,z))};
-                        if cur_remaining.list.len() == 0 {continue;}
+                        let cur_remaining = RemainingAtPos {
+                            pos: (x, y, z),
+                            list: self.get_remaining(&(x, y, z)),
+                        };
+                        if cur_remaining.list.len() == 0 {
+                            continue;
+                        }
                         list_remaining.push(cur_remaining);
 
                         if list_remaining.last().unwrap().list.len() == 1 {
@@ -69,20 +82,22 @@ pub mod sudoku_3d {
             for each in &list_remaining {
                 each.print_info();
                 println!("");
-            } 
+            }
             if list_remaining.len() == 0 {
                 // No option available, either finished or error
-               return self.is_sudoku_full();
+                return self.is_sudoku_full();
             }
 
             if found_single_remain {
                 println!("Found just one remaining!");
                 let chosen_r: &RemainingAtPos = list_remaining.last().unwrap();
-                self.grid[chosen_r.pos.0][chosen_r.pos.1][chosen_r.pos.2] = Some(chosen_r.list.last().unwrap().clone());
+                self.grid[chosen_r.pos.0][chosen_r.pos.1][chosen_r.pos.2].update_value(
+                    Some(chosen_r.list.last().unwrap().clone()));
                 let result = self.solve_sudoku_recurs();
-                if result {return true;}
-                else {
-                    self.grid[chosen_r.pos.0][chosen_r.pos.1][chosen_r.pos.2] = None;
+                if result {
+                    return true;
+                } else {
+                    self.grid[chosen_r.pos.0][chosen_r.pos.1][chosen_r.pos.2].update_value(None);
                     return false;
                 }
             } else {
@@ -90,7 +105,7 @@ pub mod sudoku_3d {
                 let chosen_r: &RemainingAtPos = &list_remaining[0];
                 for val in chosen_r.list.clone() {
                     // try every option (val) found for this cell
-                    self.grid[chosen_r.pos.0][chosen_r.pos.1][chosen_r.pos.2] = Some(val.clone());
+                    self.grid[chosen_r.pos.0][chosen_r.pos.1][chosen_r.pos.2].update_value(Some(val.clone()));
                     println!("Trying {} at {:?}:", val, chosen_r.pos);
 
                     let has_worked = self.solve_sudoku_recurs();
@@ -99,27 +114,29 @@ pub mod sudoku_3d {
                     }
                     println!("Trying {} at {:?} failed, moving on", val, chosen_r.pos);
                 }
-                self.grid[chosen_r.pos.0][chosen_r.pos.1][chosen_r.pos.2] = None;
+                self.grid[chosen_r.pos.0][chosen_r.pos.1][chosen_r.pos.2].update_value(None);
             }
 
             self.print_sudoku();
-            false 
+            false
         }
-        
+
         fn is_sudoku_full(&self) -> bool {
             for x in 0..self.sdk_size {
                 for y in 0..self.sdk_size {
                     for z in 0..self.sdk_size {
-                        match self.grid[x][y][z] {
-                            Some(_) => {},
-                            None => {return false;},
+                        match self.grid[x][y][z].value() {
+                            Some(_) => {}
+                            None => {
+                                return false;
+                            }
                         }
                     }
                 }
             }
             return true;
         }
-        
+
         pub fn print_info() {
             println!("Some quick explanation:");
             color_print::cprintln!("0 -- <g>z</> -- <g>z+1</> -- <g>...</>");
@@ -132,7 +149,6 @@ pub mod sudoku_3d {
             color_print::cprintln!("[ <b>3</>, 4, 5] [ 6, 7, 8] [ 9,10,11]  ...");
             println!("...\n");
         }
-
 
         pub fn print_sudoku(&self) -> () {
             print!("\n");
@@ -149,15 +165,20 @@ pub mod sudoku_3d {
                         print!("[");
                         // s_x stands for small_x because its the x-coord in the box
                         for s_x in 0..self.box_size {
-                            Sudoku3D::print_option(&self.grid[x+s_x][y][z], str_max_size);
-                            if s_x < self.box_size-1 { print!(","); }
+                            Sudoku3D::print_option(&self.grid[x + s_x][y][z].value(), str_max_size);
+                            if s_x < self.box_size - 1 {
+                                print!(",");
+                            }
                         }
                         print!("] ");
-                        if (z+1) % self.box_size == 0 {
-                            print!("  "); }
+                        if (z + 1) % self.box_size == 0 {
+                            print!("  ");
+                        }
                     }
                     print!("\n");
-                    if (y+1) % self.box_size == 0 {print!("\n");}
+                    if (y + 1) % self.box_size == 0 {
+                        print!("\n");
+                    }
                 }
                 print!("\n");
             }
@@ -166,30 +187,29 @@ pub mod sudoku_3d {
             match opt {
                 Some(x) => {
                     let string = x.to_string();
-                    print!("{}{}", string, " ".repeat(str_len-string.len()));
-                },
+                    print!("{}{}", string, " ".repeat(str_len - string.len()));
+                }
                 None => print!("{}", (".".repeat(str_len))),
             };
-            
         }
         fn get_remaining(&self, pos: &(usize, usize, usize)) -> Vec<usize> {
             let mut found_values: Vec<usize> = Vec::new();
 
             // loop through each dimension and remove all occuring numbers
             for x in 0..self.sdk_size {
-                match self.grid[x][pos.1][pos.2] {
+                match self.grid[x][pos.1][pos.2].value() {
                     Some(val) => found_values.push(val),
                     None => {}
                 }
             }
             for y in 0..self.sdk_size {
-                match self.grid[pos.0][y][pos.2] {
+                match self.grid[pos.0][y][pos.2].value() {
                     Some(val) => found_values.push(val),
                     None => {}
                 }
             }
             for z in 0..self.sdk_size {
-                match self.grid[pos.0][pos.1][z] {
+                match self.grid[pos.0][pos.1][z].value() {
                     Some(val) => found_values.push(val),
                     None => {}
                 }
@@ -205,16 +225,18 @@ pub mod sudoku_3d {
             for x in 0..self.box_size {
                 for y in 0..self.box_size {
                     for z in 0..self.box_size {
-                        match self.grid[x + box_.0 * self.box_size]
-                            [y + box_.1 * self.box_size]
-                            [z + box_.2 * self.box_size] {
-                                Some(val) => found_values.push(val),
-                                None => {}
+                        match self.grid[x + box_.0 * self.box_size][y + box_.1 * self.box_size]
+                            [z + box_.2 * self.box_size].value()
+                        {
+                            Some(val) => found_values.push(val),
+                            None => {}
                         }
                     }
                 }
             }
-            if found_values.len() <= 1 { return found_values; }
+            if found_values.len() <= 1 {
+                return found_values;
+            }
 
             // remove duplicates:
             found_values.sort();
@@ -240,21 +262,24 @@ pub mod sudoku_3d {
         pub fn rand_sudoku_no_rules(size: usize) -> Sudoku3D {
             use rand;
 
-            let mut rand_sudoku = Sudoku3D{sdk_size : size, box_size : Sudoku3D::sdk_size_to_box_size(size), grid : Vec::new()};
+            let mut rand_sudoku = Sudoku3D {
+                sdk_size: size,
+                box_size: Sudoku3D::sdk_size_to_box_size(size),
+                grid: Vec::new(),
+            };
             for _x in 0..size {
-                let mut y_vec: Vec<Vec<Option<usize>>> = Vec::new();
+                let mut y_vec: Vec<Vec<Cell>> = Vec::new();
 
                 for _y in 0..size {
-                    let mut z_vec: Vec<Option<usize>> = Vec::new();
+                    let mut z_vec: Vec<Cell> = Vec::new();
 
                     for _z in 0..size {
                         let val = rand::random_range(0..=size);
 
                         if val == 0 {
-                            z_vec.push(None);
-                        }
-                        else {
-                            z_vec.push(Some(val));
+                            z_vec.push(Cell::new(None));
+                        } else {
+                            z_vec.push(Cell::new(Some(val)));
                         }
                     }
                     y_vec.push(z_vec);
@@ -264,8 +289,8 @@ pub mod sudoku_3d {
             rand_sudoku
         }
 
-        fn empty_grid_new(size:usize) -> SudokuVec {
-            return vec![vec![vec![None; size]; size]; size];
+        fn empty_grid_new(size: usize) -> CellGrid {
+            return vec![vec![vec![Cell::new(None); size]; size]; size];
         }
     }
     #[derive(PartialEq, Eq)]
@@ -339,12 +364,10 @@ mod tests {
 
     #[test]
     fn solve_with_1() {
-        let mut sdk: sudoku_3d::SudokuVec = vec![vec![vec![None;8];8];8];
-        sdk [0][0][0] = Some(1);
+        let mut sdk: sudoku_3d::CellGrid = vec![vec![vec![Cell::new(None); 8]; 8]; 8];
+        sdk[0][0][0].update_value(Some(1));
         let result = sudoku_3d::Sudoku3D::solve_sudoku(&sudoku_3d::Sudoku3D::new(sdk));
 
         result.1.print_sudoku();
     }
-
 }
-
